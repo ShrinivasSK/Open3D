@@ -560,12 +560,6 @@ bool FilamentScene::HasGeometry(const std::string& object_name) const {
     return (geom_entry != geometries_.end());
 }
 
-static void deallocate_vertex_buffer(void* buffer,
-                                     size_t size,
-                                     void* user_ptr) {
-    free(buffer);
-}
-
 void FilamentScene::UpdateGeometry(const std::string& object_name,
                                    const t::geometry::PointCloud& point_cloud,
                                    uint32_t update_flags) {
@@ -626,9 +620,9 @@ void FilamentScene::UpdateGeometry(const std::string& object_name,
                                        .build();
             orientation->getQuats(float4v_tangents, n_vertices);
             filament::VertexBuffer::BufferDescriptor normals_descriptor(
-                    float4v_tangents, normal_array_size,
-                    deallocate_vertex_buffer);
+                    float4v_tangents, normal_array_size, DeallocateBuffer);
             vbuf->setBufferAt(engine_, 2, std::move(normals_descriptor));
+            delete orientation;
         }
 
         if (update_flags & kUpdateUv0Flag) {
@@ -882,9 +876,12 @@ void FilamentScene::UpdateDefaultLitSSR(GeometryMaterialInstance& geom_mi) {
 }
 
 void FilamentScene::UpdateDefaultUnlit(GeometryMaterialInstance& geom_mi) {
+    float srgb = (geom_mi.properties.sRGB_vertex_color ? 1.f : 0.f);
+
     renderer_.ModifyMaterial(geom_mi.mat_instance)
             .SetColor("baseColor", geom_mi.properties.base_color, true)
             .SetParameter("pointSize", geom_mi.properties.point_size)
+            .SetParameter("srgbColor", srgb)
             .SetTexture("albedo", geom_mi.maps.albedo_map,
                         rendering::TextureSamplerParameters::Pretty())
             .Finish();
@@ -1624,6 +1621,10 @@ void FilamentScene::ShowSkybox(bool show) {
         ShowGeometry(kBackgroundName, !show);
         skybox_enabled_ = show;
     }
+}
+
+bool FilamentScene::GetSkyboxVisible() const {
+    return (scene_->getSkybox() != nullptr);
 }
 
 void FilamentScene::CreateBackgroundGeometry() {
